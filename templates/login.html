@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- As google+ API was shut down by google, I had to use this one -->
+    <meta name="google-signin-client_id" content="810960242143-p2gkpm7hffkme504ra9oui0qg9eik0rh.apps.googleusercontent.com">
+
+    <!--LOAD PRE-REQUISITES FOR GOOGLE SIGN IN -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js">
+    </script>
+
+    <script src="https://apis.google.com/js/platform.js?onload=start"> </script>
+
+    <!-- END PRE-REQUISITES FOR GOOGLE SIGN IN -->
+
+
+</head>
+
+
+<body>
+    <!-- GOOGLE SIGN IN-->
+    <div class="g-signin2" data-onsuccess="onSignIn" data-scope="consent"></div>
+
+    <div id="result"></div>
+
+    <script>
+        function onSignIn(googleUser) {
+            var id_token = googleUser.getAuthResponse().id_token;
+
+            var profile = googleUser.getBasicProfile();
+            console.log('ID: ' + profile.getId()); // Do not send to your backend! Use an ID token instead.
+            console.log('Name: ' + profile.getName());
+            console.log('Image URL: ' + profile.getImageUrl());
+            console.log('Email: ' + profile.getEmail()); // This is null if the 'email' scope is not present.
+        }
+
+
+        $.ajax({
+            type: 'POST',
+            url: '/googleconnect?state={{STATE}}',
+            data: id_token,
+            contentType: 'application/octet-stream; charset=utf-8',
+            success: function(result) {
+
+            }
+        })
+        }
+    </script>
+    <!--END GOOGLE PLUS SIGN IN -->
+</body>
+
+</html>
