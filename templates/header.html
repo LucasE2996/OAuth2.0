@@ -5,16 +5,24 @@
         </a>
     </div>
     <div class="col-md-6 text-right">
-		<a href="{{url_for('showLogin') }}">Login</a>
+        <a href="{{url_for('showLogin') }}">Login</a>
         <a href="#" onclick="signOut();">Sign out</a>
     </div>
 </div>
 
+<script src="https://apis.google.com/js/platform.js?onload=init" async defer></script>
+
 <script>
-    function signOut() {
-        var auth2 = gapi.auth2.getAuthInstance();
-        auth2.signOut().then(function() {
-            console.log('User signed out.');
+    function init() {
+        gapi.load('auth2', function () { 
+            // Ready.
         });
     }
+
+    function signOut() {
+                var auth2 = gapi.auth2.getAuthInstance();
+                auth2.signOut().then(function () {
+                    console.log('User signed out.');
+                });
+            }
 </script>
