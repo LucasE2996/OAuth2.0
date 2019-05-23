@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, jsonify, url_for, flash
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import sessionmaker
-from database_setup import Base, Restaurant, MenuItem
+from database_setup import Base, Restaurant, MenuItem, User
 from flask import session as login_session
 import random
 import string
@@ -24,7 +24,7 @@ APPLICATION_NAME = "Restaurant Menu Application"
 
 
 # Connect to Database and create database session
-engine = create_engine('sqlite:///restaurantmenu.db')
+engine = create_engine('sqlite:///restaurantmenuwithusers.db')
 Base.metadata.bind = engine
 
 DBSession = sessionmaker(bind=engine)
@@ -71,11 +71,25 @@ def googleconnect():
         #     raise ValueError('Wrong hosted domain.')
 
         # ID token is valid. Get the user's Google Account ID from the decoded token.
-        userid = idinfo['sub']
+        usertokenid = idinfo['sub']
 
         # Save user name to login session
-        login_session['username'] = idinfo['name']
-        login_session['email'] = idinfo['email']
+        userId = getUserID(idinfo['email'])
+        
+        if userId is not None:
+            currentUser = getUserInfo(userId)
+            login_session['username'] = currentUser.name
+            login_session['email'] = currentUser.email
+            login_session['picture'] = currentUser.picture
+            login_session['access_token'] = usertokenid
+        else:
+            login_session['username'] = idinfo['name']
+            login_session['email'] = idinfo['email']
+            login_session['picture'] = idinfo['picture']
+            login_session['access_token'] = usertokenid
+            createUser(login_session)
+
+        
 
     except ValueError:
         # Invalid token
@@ -87,7 +101,7 @@ def googleconnect():
     return output
 
 
-@app.route('/gdisconnect')
+@app.route('/gdisconnect', methods=['GET', 'POST'])
 def gdisconnect():
     access_token = login_session.get('access_token')
     if access_token is None:
@@ -145,7 +159,10 @@ def restaurantsJSON():
 @app.route('/restaurant/')
 def showRestaurants():
     restaurants = session.query(Restaurant).order_by(asc(Restaurant.name))
-    return render_template('restaurants.html', restaurants=restaurants)
+    if 'username' not in login_session:
+        return render_template('publicrestaurants.html', restaurants = restaurants)
+    else:
+        return render_template('restaurants.html', restaurants=restaurants)
 
 # Create a new restaurant
 @app.route('/restaurant/new/', methods=['GET', 'POST'])
@@ -153,7 +170,8 @@ def newRestaurant():
     if 'username' not in login_session:
         return redirect('/login')
     if request.method == 'POST':
-        newRestaurant = Restaurant(name=request.form['name'])
+        newRestaurant = Restaurant(name=request.form['name'],
+            user_id = login_session['user_id'])
         session.add(newRestaurant)
         flash('New Restaurant %s Successfully Created' % newRestaurant.name)
         session.commit()
@@ -199,7 +217,12 @@ def showMenu(restaurant_id):
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
     items = session.query(MenuItem).filter_by(
         restaurant_id=restaurant_id).all()
-    return render_template('menu.html', items=items, restaurant=restaurant)
+    if 'username' not in login_session:
+        creator = getUserInfo(restaurant.user_id)
+        return render_template('publicmenu.html', items=items, restaurant=restaurant, creator=creator)
+    else:
+        user = getUserInfo(getUserID(login_session['email']))
+        return render_template('menu.html', items=items, restaurant=restaurant, user=user)
 
 
 # Create a new menu item
@@ -207,10 +230,14 @@ def showMenu(restaurant_id):
 def newMenuItem(restaurant_id):
     if 'username' not in login_session:
         return redirect('/login')
-    restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
     if request.method == 'POST':
-        newItem = MenuItem(name=request.form['name'], description=request.form['description'],
-                           price=request.form['price'], course=request.form['course'], restaurant_id=restaurant_id)
+        newItem = MenuItem(
+            name=request.form['name'],
+            description=request.form['description'],
+            price=request.form['price'],
+            course=request.form['course'],
+            restaurant_id=restaurant_id,
+            user_id = login_session['user_id'])
         session.add(newItem)
         session.commit()
         flash('New Menu %s Item Successfully Created' % (newItem.name))
@@ -225,7 +252,6 @@ def editMenuItem(restaurant_id, menu_id):
     if 'username' not in login_session:
         return redirect('/login')
     editedItem = session.query(MenuItem).filter_by(id=menu_id).one()
-    restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
     if request.method == 'POST':
         if request.form['name']:
             editedItem.name = request.form['name']
@@ -248,7 +274,6 @@ def editMenuItem(restaurant_id, menu_id):
 def deleteMenuItem(restaurant_id, menu_id):
     if 'username' not in login_session:
         return redirect('/login')
-    restaurant = session.query(Restaurant).filter_by(id=restaurant_id).one()
     itemToDelete = session.query(MenuItem).filter_by(id=menu_id).one()
     if request.method == 'POST':
         session.delete(itemToDelete)
@@ -258,8 +283,27 @@ def deleteMenuItem(restaurant_id, menu_id):
     else:
         return render_template('deleteMenuItem.html', item=itemToDelete)
 
+def getUserID(email):
+    user = session.query(User).filter_by(email=email).first()
+    if user is not None:
+        return user.id
+    return None
 
-# if __name__ == '__main__':
-app.secret_key = 'super_secret_key'
-app.debug = True
-app.run(host='0.0.0.0', port=5000)
+def getUserInfo(user_id):
+    user = session.query(User).filter_by(id = user_id).first()
+    return user
+
+def createUser(login_session):
+    """ Creates new user """
+    newUser = User(name = login_session['username'],
+        email = login_session['email'],
+        picture = login_session['picture'])
+    session.add(newUser)
+    session.commit()
+    user = session.query(User).filter_by(email = login_session['email']).first()
+    return user.id
+
+if __name__ == '__main__':
+    app.secret_key = 'super_secret_key'
+    app.debug = True
+    app.run(host='0.0.0.0', port=5000)
