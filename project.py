@@ -75,7 +75,7 @@ def googleconnect():
 
         # Save user name to login session
         userId = getUserID(idinfo['email'])
-        
+
         if userId is not None:
             currentUser = getUserInfo(userId)
             login_session['username'] = currentUser.name
@@ -89,15 +89,14 @@ def googleconnect():
             login_session['access_token'] = usertokenid
             createUser(login_session)
 
-        
-
     except ValueError:
         # Invalid token
         pass
 
     output = ''
     output += '<h1>Welcome' + str(login_session['username']) + '!'
-    output += '<h4>You are logged in with email: ' + str(login_session['email']) + '</h4>'
+    output += '<h4>You are logged in with email: ' + \
+        str(login_session['email']) + '</h4>'
     return output
 
 
@@ -110,27 +109,13 @@ def gdisconnect():
             'Current user not connected.'), 401)
         response.headers['Content-Type'] = 'application/json'
         return response
-    print('In gdisconnect access token is %s', access_token)
-    print('User name is: ')
-    print(login_session['username'])
-    url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % login_session['access_token']
-    h = httplib2.Http()
-    result = h.request(url, 'GET')[0]
-    print('result is ')
-    print(result)
-    if result['status'] == '200':
-        del login_session['access_token']
-        del login_session['gplus_id']
-        del login_session['username']
-        del login_session['email']
-        del login_session['picture']
-        response = make_response(json.dumps('Successfully disconnected.'), 200)
-        response.headers['Content-Type'] = 'application/json'
-        return response
-    else:
-        response = make_response(json.dumps(
-            'Failed to revoke token for given user.', 400))
-        response.headers['Content-Type'] = 'application/json'
+
+    del login_session['access_token']
+    del login_session['username']
+    del login_session['email']
+    del login_session['picture']
+    response = make_response(json.dumps('Successfully disconnected.'), 200)
+    response.headers['Content-Type'] = 'application/json'
     return response
 
 # JSON APIs to view Restaurant Information
@@ -160,8 +145,10 @@ def restaurantsJSON():
 def showRestaurants():
     restaurants = session.query(Restaurant).order_by(asc(Restaurant.name))
     if 'username' not in login_session:
-        return render_template('publicrestaurants.html', restaurants = restaurants)
+        print('public template')
+        return render_template('publicrestaurants.html', restaurants=restaurants)
     else:
+        print('private template')
         return render_template('restaurants.html', restaurants=restaurants)
 
 # Create a new restaurant
@@ -171,7 +158,7 @@ def newRestaurant():
         return redirect('/login')
     if request.method == 'POST':
         newRestaurant = Restaurant(name=request.form['name'],
-            user_id = login_session['user_id'])
+                                   user_id=getUserID(login_session['email']))
         session.add(newRestaurant)
         flash('New Restaurant %s Successfully Created' % newRestaurant.name)
         session.commit()
@@ -219,9 +206,11 @@ def showMenu(restaurant_id):
         restaurant_id=restaurant_id).all()
     if 'username' not in login_session:
         creator = getUserInfo(restaurant.user_id)
+        print('with creator')
         return render_template('publicmenu.html', items=items, restaurant=restaurant, creator=creator)
     else:
         user = getUserInfo(getUserID(login_session['email']))
+        print('with user')
         return render_template('menu.html', items=items, restaurant=restaurant, user=user)
 
 
@@ -237,7 +226,7 @@ def newMenuItem(restaurant_id):
             price=request.form['price'],
             course=request.form['course'],
             restaurant_id=restaurant_id,
-            user_id = login_session['user_id'])
+            user_id=getUserID(login_session['email']))
         session.add(newItem)
         session.commit()
         flash('New Menu %s Item Successfully Created' % (newItem.name))
@@ -283,25 +272,29 @@ def deleteMenuItem(restaurant_id, menu_id):
     else:
         return render_template('deleteMenuItem.html', item=itemToDelete)
 
+
 def getUserID(email):
     user = session.query(User).filter_by(email=email).first()
     if user is not None:
         return user.id
     return None
 
+
 def getUserInfo(user_id):
-    user = session.query(User).filter_by(id = user_id).first()
+    user = session.query(User).filter_by(id=user_id).first()
     return user
+
 
 def createUser(login_session):
     """ Creates new user """
-    newUser = User(name = login_session['username'],
-        email = login_session['email'],
-        picture = login_session['picture'])
+    newUser = User(name=login_session['username'],
+                   email=login_session['email'],
+                   picture=login_session['picture'])
     session.add(newUser)
     session.commit()
-    user = session.query(User).filter_by(email = login_session['email']).first()
+    user = session.query(User).filter_by(email=login_session['email']).first()
     return user.id
+
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
